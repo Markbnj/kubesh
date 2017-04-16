@@ -46,8 +46,45 @@ available for contexts:
 EOF
 }
 
-function list_contexts {
-   echo "$(kubectl config get-contexts)"
+function parse_contexts {
+  declare -a -g contexts
+  declare -A context
+  local old_ifs=$IFS
+  IFS=$'\n'
+  for l in $(kubectl config view | sed -n '/- context/,/name:/ p'); do
+    if [ "$l" == "- context:" ]; then
+      if [ ${#context[@]} -gt 0 ]; then
+        decl=$(declare -p context)
+        contexts=("${contexts[@]}" "${decl}")
+        unset context
+        declare -A context
+      fi
+    else
+      local trim_l=$(echo -n $l | sed 's/^ *//g')
+      if [ "${trim_l:0:8}" == "cluster:" ]; then
+        context["cluster"]=${trim_l:9}
+      elif [ "${trim_l:0:5}" == "name:" ]; then
+        context["name"]=${trim_l:6}
+      fi
+    fi
+  done
+  decl=$(declare -p context)
+  contexts=("${contexts[@]}" "${decl}")
+  IFS=$old_ifs
+}
+
+function print_context_list {
+  local old_ifs=$IFS
+  local current_context=$(kubectl config current-context)
+  local current=1
+  parse_contexts
+  printf '%-40s %-40s\n' "NAME" "CLUSTER"
+  IFS=$'\n'
+  for context_str in ${contexts[@]}; do
+    eval "$context_str"
+    printf '%-40s %-40s\n' ${context["name"]} ${context["cluster"]}
+  done
+  IFS=$old_ifs
 }
 
 function print_context {
@@ -65,7 +102,7 @@ function context {
     shopt -s nocasematch
     case "$1" in
       "list")
-        list_contexts
+        print_context_list
         ;;
       "select")
         select_context $2
@@ -132,12 +169,13 @@ while getopts h opt; do
 done
 
 if [ -z "$(which kubectl)" ]; then
-  echo "ERROR: this script requires kubectl"
+  echo "ERROR: kubesh requires kubectl (https://kubernetes.io/docs/tasks/kubectl/install/)"
   exit 1
 fi
 
 export -f print_context_commands
-export -f list_contexts
+export -f parse_contexts
+export -f print_context_list
 export -f print_context
 export -f select_context
 export -f context
