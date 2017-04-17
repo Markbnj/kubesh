@@ -16,7 +16,7 @@
 
 set -ueo pipefail
 
-function cli_help {
+function __cli_help {
 cat << EOF
 NAME
   kubesh - sets up a shell environment for kubernetes\' kubectl tool with a
@@ -43,7 +43,7 @@ EOF
   fi
 }
 
-function print_context_commands {
+function __print_context_commands {
 cat << EOF
 context [CONTEXT|SUBCOMMAND]
 
@@ -63,7 +63,7 @@ available for contexts:
 EOF
 }
 
-function parse_contexts {
+function __parse_contexts {
   unset contexts
   declare -a -g contexts
   declare -A context
@@ -89,10 +89,10 @@ function parse_contexts {
   IFS=$old_ifs
 }
 
-function print_context_list {
+function __print_context_list {
   local old_ifs=$IFS
   local current_context=$(kubectl config current-context)
-  parse_contexts
+  __parse_contexts
   printf '%-3s %-2s %-45s %-45s\n' "#" "" "NAME" "CLUSTER"
   IFS=$'\n'
   for ((i=0;i<${#contexts[@]};i++)); do
@@ -107,18 +107,18 @@ function print_context_list {
   IFS=$old_ifs
 }
 
-function print_context {
+function __print_context {
   echo $(kubectl config current-context)
 }
 
-function switch_context {
+function __switch_context {
   kubectl config use-context $1
   active_context=$(kubectl config current-context)
   PS1="(${active_context}) $old_prompt"
 }
 
-function search_context {
-  parse_contexts
+function __search_context {
+  __parse_contexts
   local old_ifs=$IFS
   IFS=$'\n'
   for context_str in ${contexts[@]}; do
@@ -131,8 +131,8 @@ function search_context {
   IFS=$old_ifs
 }
 
-function select_context {
-  print_context_list
+function __select_context {
+  __print_context_list
   read -s -N 1 -p "Select context: " choice
   printf "\n"
   local err_msg="ERROR: choice must be an integer in the range 1..${#contexts[@]}"
@@ -154,24 +154,24 @@ function select_context {
 
 function context {
   if [ -z "${1}" ]; then
-      print_context
+      __print_context
   else
     shopt -s nocasematch
     case "$1" in
       "list")
-        print_context_list
+        __print_context_list
         ;;
       "select")
-        select_context
+        __select_context
         if [ ! -z "${selected_context}" ]; then
-          switch_context ${selected_context}
+          __switch_context ${selected_context}
         fi
         selected_context=
         ;;
       *)
-        search_context $1
+        __search_context $1
         if [ ! -z "${selected_context}" ]; then
-          switch_context ${selected_context}
+          __switch_context ${selected_context}
         fi
         selected_context=
         ;;
@@ -180,7 +180,7 @@ function context {
   fi
 }
 
-function print_commands {
+function __print_commands {
 cat << EOF
 The following commands are available:
 
@@ -202,12 +202,12 @@ EOF
 
 function help {
   if [ -z "${1}" ]; then
-      print_commands
+      __print_commands
   else
     shopt -s nocasematch
     case "$1" in
       "context")
-        print_context_commands
+        __print_context_commands
         ;;
       "bash")
         builtin help
@@ -223,7 +223,7 @@ function help {
 while getopts h opt; do
   case $opt in
     h)
-      cli_help
+      __cli_help
       ;;
     *)
       echo "ERROR: Unknown option '${opt}'"
@@ -237,15 +237,15 @@ if [ -z "$(which kubectl)" ]; then
   exit 1
 fi
 
-export -f print_context_commands
-export -f parse_contexts
-export -f print_context_list
-export -f print_context
-export -f switch_context
-export -f search_context
-export -f select_context
+export -f __print_context_commands
+export -f __parse_contexts
+export -f __print_context_list
+export -f __print_context
+export -f __switch_context
+export -f __search_context
+export -f __select_context
+export -f __print_commands
 export -f context
-export -f print_commands
 export -f help
 
 export active_context="$(kubectl config current-context)"
