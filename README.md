@@ -1,7 +1,5 @@
 # kubesh
-A bash script to create a useful shell environment for working with kubernetes using kubectl. Modifies the prompt to include the current context name to make it easy to know what cluster you're working on, and also provides several convenience functions to make it easy to switch between contexts:
-
-![kubesh in action](http://i.imgur.com/o7wqRn7.png)
+A bash script to create a useful shell environment for working with kubernetes using kubectl. Modifies the prompt to include the current context name to make it easy to know what cluster you're working on, and also provides several convenience functions to make it easy to switch between contexts.
 
 ## Use
 
