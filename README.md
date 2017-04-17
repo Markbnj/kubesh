@@ -6,3 +6,5 @@ A bash script to create a useful shell environment for working with kubernetes u
 ## Use
 
 Just copy the `kubesh` script somewhere on your path and mark it executable (`chmod 755 kubesh`). Then run the script to create the shell environment. Requires kubectl and sed.
+
+PR's welcome!
