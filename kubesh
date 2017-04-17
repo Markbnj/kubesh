@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 set -ueo pipefail
 
 function cli_help {
@@ -15,8 +16,6 @@ DESCRIPTION
 OPTIONAL ARGUMENTS
   -h
     Display this help. All other arguments are ignored.
-
-POSITIONAL ARGUMENTS
 
 EOF
   if [ -z "${1-}" ]; then
@@ -47,6 +46,7 @@ EOF
 }
 
 function parse_contexts {
+  unset contexts
   declare -a -g contexts
   declare -A context
   local old_ifs=$IFS
@@ -54,8 +54,7 @@ function parse_contexts {
   for l in $(kubectl config view | sed -n '/- context/,/name:/ p'); do
     if [ "$l" == "- context:" ]; then
       if [ ${#context[@]} -gt 0 ]; then
-        decl=$(declare -p context)
-        contexts=("${contexts[@]}" "${decl}")
+        contexts=("${contexts[@]}" "$(declare -p context)")
         unset context
         declare -A context
       fi
@@ -68,21 +67,24 @@ function parse_contexts {
       fi
     fi
   done
-  decl=$(declare -p context)
-  contexts=("${contexts[@]}" "${decl}")
+  contexts=("${contexts[@]}" "$(declare -p context)")
   IFS=$old_ifs
 }
 
 function print_context_list {
   local old_ifs=$IFS
   local current_context=$(kubectl config current-context)
-  local current=1
   parse_contexts
-  printf '%-40s %-40s\n' "NAME" "CLUSTER"
+  printf '%-3s %-2s %-45s %-45s\n' "#" "" "NAME" "CLUSTER"
   IFS=$'\n'
-  for context_str in ${contexts[@]}; do
+  for ((i=0;i<${#contexts[@]};i++)); do
+    local context_str=${contexts[i]}
     eval "$context_str"
-    printf '%-40s %-40s\n' ${context["name"]} ${context["cluster"]}
+    local active=""
+    if [ "${current_context}" == "${context["name"]}" ]; then
+      active=" *"
+    fi
+    printf '%-3s %-2s %-45s %-45s\n' $((${i}+1)) "${active}" ${context["name"]} ${context["cluster"]}
   done
   IFS=$old_ifs
 }
@@ -91,8 +93,35 @@ function print_context {
   echo $(kubectl config current-context)
 }
 
+function switch_context {
+  kubectl config use-context $1
+  active_context=$(kubectl config current-context)
+  PS1="(${active_context}) $old_prompt"
+}
+
+function search_context {
+  echo "search_context"
+}
+
 function select_context {
-  echo "select_context"
+  print_context_list
+  read -s -N 1 -p "Select context: " choice
+  printf "\n"
+  local err_msg="ERROR: choice must be an integer in the range 1..${#contexts[@]}"
+  case $choice in
+    ''|*[!0-9]*)
+      echo $err_msg
+      ;;
+    *)
+      if [ $choice -gt ${#contexts[@]} ]; then
+        echo $err_msg
+      else
+        local context_str=${contexts[(($choice-1))]}
+        eval "$context_str"
+        switch_context ${context["name"]}
+      fi
+      ;;
+  esac
 }
 
 function context {
@@ -105,11 +134,16 @@ function context {
         print_context_list
         ;;
       "select")
-        select_context $2
+        select_context
+        if [ ! -z "${selected_context}" ]; then
+          switch_context ${selected_context}
+        fi
         ;;
       *)
-        echo "ERROR: Unknown subcommand '${1}'"
-        print_context_commands
+        search_context $1
+        if [ ! -z "${selected_context}" ]; then
+          switch_context ${selected_context}
+        fi
         ;;
     esac
     shopt -u nocasematch
@@ -177,9 +211,13 @@ export -f print_context_commands
 export -f parse_contexts
 export -f print_context_list
 export -f print_context
+export -f switch_context
+export -f search_context
 export -f select_context
 export -f context
 export -f print_commands
 export -f help
 
-bash
+export active_context="$(kubectl config current-context)"
+
+exec bash --init-file <(echo 'export old_prompt=$PS1;PS1="(${active_context}) $old_prompt"')
