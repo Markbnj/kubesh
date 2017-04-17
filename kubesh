@@ -16,6 +16,12 @@
 
 set -ueo pipefail
 
+export kubesh_version="0.1.0"
+
+#
+# Only called when the -h options is passed on the command line, not really
+# anything to put here yet but it's possible there might be down the road.
+#
 function __cli_help {
 cat << EOF
 NAME
@@ -43,26 +49,11 @@ EOF
   fi
 }
 
-function __print_context_commands {
-cat << EOF
-context [CONTEXT|SUBCOMMAND]
-
-When given without arguments displays the current context. If a valid context
-name or unique fragment is supplied switches to that context. Any other
-argument is interpreted as a subcommand. The following subcommands are
-available for contexts:
-
-  list
-    Display the list of available contexts from the kubectl
-    config
-
-  select
-    Switch to another context by selecting from a list of all
-    contexts in the config.
-
-EOF
-}
-
+#
+# Responsible for parsing contexts out of the output from 'kubectl config view'.
+# After this runs the global 'contexts' is an array of strings representing
+# serialized associative arrays, one per context.
+#
 function __parse_contexts {
   unset contexts
   declare -a -g contexts
@@ -89,6 +80,12 @@ function __parse_contexts {
   IFS=$old_ifs
 }
 
+#
+# Calls __parse_contexts and then displays the list of contexts. Note
+# how the function deserializes the associative arrays stored in the
+# global 'contexts'. Called by both the 'context select' and 'context
+# list' commands.
+#
 function __print_context_list {
   local old_ifs=$IFS
   local current_context=$(kubectl config current-context)
@@ -104,19 +101,31 @@ function __print_context_list {
     fi
     printf '%-3s %-2s %-45s %-45s\n' $((${i}+1)) "${active}" ${context["name"]} ${context["cluster"]}
   done
+  printf "\n"
   IFS=$old_ifs
 }
 
+#
+# Prints the current active context
+#
 function __print_context {
   echo $(kubectl config current-context)
 }
 
+#
+# Switches to a new context and updates the prompt. Expects the context
+# name in $1
+#
 function __switch_context {
   kubectl config use-context $1
   active_context=$(kubectl config current-context)
   PS1="(${active_context}) $old_prompt"
 }
 
+#
+# Searches for a context name by globbing a fragment passed in $1. If
+# a match is found the global 'selected_context' is set on exit.
+#
 function __search_context {
   __parse_contexts
   local old_ifs=$IFS
@@ -131,6 +140,10 @@ function __search_context {
   IFS=$old_ifs
 }
 
+#
+# Displays the list of available contexts and prompts the user to select one
+# by ordinal.
+#
 function __select_context {
   __print_context_list
   read -s -N 1 -p "Select context: " choice
@@ -152,6 +165,11 @@ function __select_context {
   esac
 }
 
+#
+# Implements the context command. The context command format is:
+#   context [CONTEXT|SUBCOMMAND]
+# where CONTEXT is a context name or fragment of a name, and
+# SUBCOMMAND is one of the available context commands.
 function context {
   if [ -z "${1}" ]; then
       __print_context
@@ -180,8 +198,42 @@ function context {
   fi
 }
 
+#
+# Called when the 'help context' command is entered, simply prints out the
+# list of available commands for contexts.
+#
+function __print_context_commands {
+cat << EOF
+
+kubesh ${kubesh_version} - kubernetes/kubectl shell environment
+
+context [CONTEXT|SUBCOMMAND]
+
+When given without arguments displays the current context. If a valid context
+name or unique fragment is supplied switches to that context. Any other
+argument is interpreted as a subcommand. The following subcommands are
+available for contexts:
+
+  list
+    Display the list of available contexts from the kubectl
+    config
+
+  select
+    Switch to another context by selecting from a list of all
+    contexts in the config.
+
+EOF
+}
+
+#
+# Called when the 'help' command is entered, simply prints out the
+# list of available commands.
+#
 function __print_commands {
 cat << EOF
+
+kubesh ${kubesh_version} - kubernetes/kubectl shell environment
+
 The following commands are available:
 
   context [CONTEXT|SUBCOMMAND]
@@ -200,6 +252,12 @@ The following commands are available:
 EOF
 }
 
+#
+# Implements the help command. Recognized topics invoke one of the functions
+# above to print out help for that topic. Unrecognized topics are passed to
+# the bash builtin help system. The special topic "help bash" invokes the
+# builtin help with no arguments.
+#
 function help {
   if [ -z "${1}" ]; then
       __print_commands
@@ -220,6 +278,11 @@ function help {
   fi
 }
 
+#
+# Really nothing going on here yet but handling the useless -h argument.
+# Keeping this stuff in case I expand functionality and need to add some
+# args later.
+#
 while getopts h opt; do
   case $opt in
     h)
@@ -232,11 +295,22 @@ while getopts h opt; do
   esac
 done
 
+#
+# Check to make sure necessary commands are installed.
+#
 if [ -z "$(which kubectl)" ]; then
   echo "ERROR: kubesh requires kubectl (https://kubernetes.io/docs/tasks/kubectl/install/)"
   exit 1
 fi
+if [ -z "$(which sed)" ]; then
+  echo "ERROR: kubesh requires the sed program (https://www.gnu.org/software/sed/manual/sed.html)"
+  exit 1
+fi
 
+#
+# These have to be exported so they are available to be called when commands are
+# run from the exec'd shell
+#
 export -f __print_context_commands
 export -f __parse_contexts
 export -f __print_context_list
@@ -245,9 +319,19 @@ export -f __switch_context
 export -f __search_context
 export -f __select_context
 export -f __print_commands
+
+#
+# Exports of available command functions
+#
 export -f context
 export -f help
 
+#
+# Initial value for the active context, which is used to build the prompt.
+#
 export active_context="$(kubectl config current-context)"
 
+#
+# Invoke the shell with exec so its interactive and PS1 gets set.
+#
 exec bash --init-file <(echo 'export old_prompt=$PS1;PS1="(${active_context}) $old_prompt"')
