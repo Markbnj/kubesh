@@ -100,7 +100,17 @@ function switch_context {
 }
 
 function search_context {
-  echo "search_context"
+  parse_contexts
+  local old_ifs=$IFS
+  IFS=$'\n'
+  for context_str in ${contexts[@]}; do
+    eval "$context_str"
+    if [[ ${context["name"]} == *"$1"* ]]; then
+      selected_context=${context["name"]}
+      break
+    fi
+  done
+  IFS=$old_ifs
 }
 
 function select_context {
@@ -118,7 +128,7 @@ function select_context {
       else
         local context_str=${contexts[(($choice-1))]}
         eval "$context_str"
-        switch_context ${context["name"]}
+        selected_context=${context["name"]}
       fi
       ;;
   esac
@@ -138,12 +148,14 @@ function context {
         if [ ! -z "${selected_context}" ]; then
           switch_context ${selected_context}
         fi
+        selected_context=
         ;;
       *)
         search_context $1
         if [ ! -z "${selected_context}" ]; then
           switch_context ${selected_context}
         fi
+        selected_context=
         ;;
     esac
     shopt -u nocasematch
