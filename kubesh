@@ -119,7 +119,9 @@ function __print_context {
 function __switch_context {
   kubectl config use-context $1
   active_context=$(kubectl config current-context)
-  PS1="(${active_context}) $old_prompt"
+  if $prompt_on; then
+    PS1="(${active_context}) $old_prompt"
+  fi
 }
 
 #
@@ -199,6 +201,35 @@ function context {
 }
 
 #
+# Implements the prompt command. The prompt command format is:
+#   prompt [SUBCOMMAND]
+# where SUBCOMMAND is on of the available subcommands.
+#
+function prompt {
+  if [ -z "${1}" ]; then
+      echo "not implemented"
+      # toggle the prompt
+  else
+    shopt -s nocasematch
+    case "$1" in
+      "on")
+        echo "not implemented"
+        # turn the prompt on
+        ;;
+      "off")
+        echo "not implemented"
+        # turn the prompt off
+        ;;
+      *)
+        echo "ERROR: unrecognized subcommand $1"
+        __print_prompt_commands
+        ;;
+    esac
+    shopt -u nocasematch
+  fi
+}
+
+#
 # Called when the 'help context' command is entered, simply prints out the
 # list of available commands for contexts.
 #
@@ -226,6 +257,29 @@ EOF
 }
 
 #
+# Called when the 'help prompt' command is entered, simply prints out the
+# list of available commands for prompt control.
+#
+function __print_prompt_commands {
+cat << EOF
+
+kubesh ${kubesh_version} - kubernetes/kubectl shell environment
+
+prompt [SUBCOMMAND]
+
+Enables control over the display of context information in the shell prompt.
+
+  on
+    Turn on display of context information in the shell prompt. This is the
+    default.
+
+  off
+    Turn off display of context information in the shell prompt.
+
+EOF
+}
+
+#
 # Called when the 'help' command is entered, simply prints out the
 # list of available commands.
 #
@@ -238,6 +292,10 @@ The following commands are available:
 
   context [CONTEXT|SUBCOMMAND]
     List and select available cluster contexts, or print the current context.
+
+  prompt [SUBCOMMAND]
+    Enables/disables display of the current kubernetes context in the shell
+    prompt.
 
   help [TOPIC]
     Show help for the kubesh environment. When given without arguments the
@@ -266,6 +324,9 @@ function help {
     case "$1" in
       "context")
         __print_context_commands
+        ;;
+      "prompt")
+        __print_prompt_commands
         ;;
       "bash")
         builtin help
@@ -311,27 +372,31 @@ fi
 # These have to be exported so they are available to be called when commands are
 # run from the exec'd shell
 #
-export -f __print_context_commands
 export -f __parse_contexts
 export -f __print_context_list
 export -f __print_context
 export -f __switch_context
 export -f __search_context
 export -f __select_context
+export -f __print_context_commands
+export -f __print_prompt_commands
 export -f __print_commands
 
 #
 # Exports of available command functions
 #
 export -f context
+export -f prompt
 export -f help
 
+# These exports maintain state that is needed in the child shell
 #
-# Initial value for the active context, which is used to build the prompt.
+#   Initial value for the active context, which is used to build the prompt.
 #
 export active_context="$(kubectl config current-context)"
+export prompt_on=true
 
 #
 # Invoke the shell with exec so its interactive and PS1 gets set.
 #
-exec bash --init-file <(echo 'export old_prompt=$PS1;PS1="(${active_context}) $old_prompt"')
+exec bash --init-file <(echo 'export old_prompt=$PS1; if $prompt_on; then PS1="(${active_context}) $old_prompt"; fi')
