@@ -38,6 +38,8 @@ DESCRIPTION
   available contexts, making switching back and forth very easy.
 
 OPTIONAL ARGUMENTS
+  -n
+    Start with the context prompt disabled.
   -h
     Display this help. All other arguments are ignored.
 
@@ -344,10 +346,13 @@ function help {
 # Keeping this stuff in case I expand functionality and need to add some
 # args later.
 #
-while getopts h opt; do
+while getopts hn opt; do
   case $opt in
     h)
       __cli_help
+      ;;
+    n)
+      prompt_on=false
       ;;
     *)
       echo "ERROR: Unknown option '${opt}'"
