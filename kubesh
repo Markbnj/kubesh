@@ -16,7 +16,7 @@
 
 set -ueo pipefail
 
-export kubesh_version="0.1.0"
+export kubesh_version="0.2.0"
 
 #
 # Only called when the -h options is passed on the command line, not really
@@ -121,9 +121,7 @@ function __print_context {
 function __switch_context {
   kubectl config use-context $1
   active_context=$(kubectl config current-context)
-  if $prompt_on; then
-    PS1="(${active_context}) $old_prompt"
-  fi
+  __prompt_set
 }
 
 #
@@ -209,18 +207,23 @@ function context {
 #
 function prompt {
   if [ -z "${1}" ]; then
-      echo "not implemented"
-      # toggle the prompt
+    if $prompt_on; then
+      prompt_on=false
+      __prompt_set
+    else
+      prompt_on=true
+      __prompt_set
+    fi
   else
     shopt -s nocasematch
     case "$1" in
       "on")
-        echo "not implemented"
-        # turn the prompt on
+        prompt_on=true
+        __prompt_set
         ;;
       "off")
-        echo "not implemented"
-        # turn the prompt off
+        prompt_on=false
+        __prompt_set
         ;;
       *)
         echo "ERROR: unrecognized subcommand $1"
@@ -228,6 +231,18 @@ function prompt {
         ;;
     esac
     shopt -u nocasematch
+  fi
+}
+
+#
+# Turns the display of context information in the shell prompt on or off
+# based on the current state of $prompt_on
+#
+function __prompt_set {
+  if $prompt_on; then
+    PS1="(${active_context}) $old_prompt"
+  else
+    PS1="$old_prompt"
   fi
 }
 
@@ -383,6 +398,7 @@ export -f __print_context
 export -f __switch_context
 export -f __search_context
 export -f __select_context
+export -f __prompt_set
 export -f __print_context_commands
 export -f __print_prompt_commands
 export -f __print_commands
@@ -400,8 +416,9 @@ export -f help
 #
 export active_context="$(kubectl config current-context)"
 export prompt_on=true
+export kubesh_welcome="kubesh ${kubesh_version} (type 'help' for more information)"
 
 #
 # Invoke the shell with exec so its interactive and PS1 gets set.
 #
-exec bash --init-file <(echo 'export old_prompt=$PS1; if $prompt_on; then PS1="(${active_context}) $old_prompt"; fi')
+exec bash --init-file <(echo 'export old_prompt=$PS1; echo ${kubesh_welcome}; if $prompt_on; then PS1="(${active_context}) $old_prompt"; fi')
