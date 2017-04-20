@@ -27,7 +27,8 @@ OPTIONAL ARGUMENTS
 
 ## History
 
-  - 0.1.0: initial release
-  - 0.2.0: added ability to toggle the prompt display on/off
+  - 0.1.0 (4/17/2017): initial release
+  - 0.2.0 (4/19/2017): added ability to toggle the prompt display on/off
+  - 0.2.1 (4/19/2017): sourced .bashrc in subshell so aliases would work
 
 ## PR's welcome!
