@@ -417,4 +417,4 @@ export -f help
 #
 # Invoke the shell with exec so its interactive and PS1 gets set.
 #
-exec bash --init-file <(echo 'export old_prompt=$PS1; echo ${kubesh_welcome}; if $prompt_on; then PS1="(${active_context}) $old_prompt"; fi')
+exec bash --init-file <(echo '. ~/.bashrc; export old_prompt=$PS1; echo ${kubesh_welcome}; if $prompt_on; then PS1="(${active_context}) $old_prompt"; fi')
