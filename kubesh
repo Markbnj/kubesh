@@ -25,17 +25,16 @@ export kubesh_version="0.2.0"
 function __cli_help {
 cat << EOF
 NAME
-  kubesh - sets up a shell environment for kubernetes\' kubectl tool with a
-  number of useful commands
+  kubesh - sets up a shell environment for kubernetes kubectl tool with a
+  number of useful commands.
 
 SYNOPSIS
-  kubesh
+  kubesh [-h] [-n]
 
 DESCRIPTION
-  The kubesh script creates several functions that implement commands and
-  execs a child shell with a prompt that makes it clear which kube context
-  is currently active. Commands are available to list and select from the
-  available contexts, making switching back and forth very easy.
+  Kubesh displays the current kubernetes context in the shell prompt and adds
+  some commands to make it easier to switch between contexts. Run kubesh and
+  type 'help' at the shell prompt for more information on commands.
 
 OPTIONAL ARGUMENTS
   -n
@@ -357,9 +356,14 @@ function help {
 }
 
 #
-# Really nothing going on here yet but handling the useless -h argument.
-# Keeping this stuff in case I expand functionality and need to add some
-# args later.
+# These exports maintain state that is needed in the child shell
+#
+export active_context="$(kubectl config current-context)"
+export prompt_on=true
+export kubesh_welcome="kubesh ${kubesh_version} (type 'help' for more information)"
+
+#
+# Handle the few command line args.
 #
 while getopts hn opt; do
   case $opt in
@@ -409,14 +413,6 @@ export -f __print_commands
 export -f context
 export -f prompt
 export -f help
-
-# These exports maintain state that is needed in the child shell
-#
-#   Initial value for the active context, which is used to build the prompt.
-#
-export active_context="$(kubectl config current-context)"
-export prompt_on=true
-export kubesh_welcome="kubesh ${kubesh_version} (type 'help' for more information)"
 
 #
 # Invoke the shell with exec so its interactive and PS1 gets set.
