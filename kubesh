@@ -412,6 +412,17 @@ while getopts hn opt; do
 done
 
 #
+# Let's not run inside ourself
+#
+set +u
+if [ ! -z "$kubesh_pid" ]; then
+  echo "Error: kubesh is already running"
+  exit 1
+fi
+set -u
+export kubesh_pid=$$
+
+#
 # These have to be exported so they are available to be called when commands are
 # run from the exec'd shell
 #
