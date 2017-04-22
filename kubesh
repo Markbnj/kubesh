@@ -356,6 +356,18 @@ function help {
 }
 
 #
+# Check to make sure necessary commands are installed.
+#
+if [ -z "$(which kubectl)" ]; then
+  echo "ERROR: kubesh requires kubectl (https://kubernetes.io/docs/tasks/kubectl/install/)"
+  exit 1
+fi
+if [ -z "$(which sed)" ]; then
+  echo "ERROR: kubesh requires the sed program (https://www.gnu.org/software/sed/manual/sed.html)"
+  exit 1
+fi
+
+#
 # Check to make sure we have a current kubectl context
 #
 set +e
@@ -390,18 +402,6 @@ while getopts hn opt; do
       ;;
   esac
 done
-
-#
-# Check to make sure necessary commands are installed.
-#
-if [ -z "$(which kubectl)" ]; then
-  echo "ERROR: kubesh requires kubectl (https://kubernetes.io/docs/tasks/kubectl/install/)"
-  exit 1
-fi
-if [ -z "$(which sed)" ]; then
-  echo "ERROR: kubesh requires the sed program (https://www.gnu.org/software/sed/manual/sed.html)"
-  exit 1
-fi
 
 #
 # These have to be exported so they are available to be called when commands are
