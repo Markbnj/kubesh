@@ -358,11 +358,11 @@ function help {
 #
 # Check to make sure necessary commands are installed.
 #
-if [ -z "$(which kubectl)" ]; then
+if ! command -v kubectl > /dev/null 2>&1; then
   echo "ERROR: kubesh requires kubectl (https://kubernetes.io/docs/tasks/kubectl/install/)"
   exit 1
 fi
-if [ -z "$(which sed)" ]; then
+if ! command -v sed > /dev/null 2>&1; then
   echo "ERROR: kubesh requires the sed program (https://www.gnu.org/software/sed/manual/sed.html)"
   exit 1
 fi
