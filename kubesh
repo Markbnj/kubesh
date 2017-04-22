@@ -16,7 +16,7 @@
 
 set -ueo pipefail
 
-export kubesh_version="0.2.1"
+export kubesh_version="0.2.2"
 
 #
 # Only called when the -h options is passed on the command line, not really
@@ -356,9 +356,20 @@ function help {
 }
 
 #
+# Check to make sure we have a current kubectl context
+#
+set +e
+current_context=$(kubectl config current-context 2>&1)
+if [ $? != 0 ]; then
+  echo "ERROR: couldn't read current kubectl context (do you have one?)"
+  exit 1
+fi
+set -e
+
+#
 # These exports maintain state that is needed in the child shell
 #
-export active_context="$(kubectl config current-context)"
+export active_context=$current_context
 export prompt_on=true
 export kubesh_welcome="kubesh ${kubesh_version} (type 'help' for more information)"
 
