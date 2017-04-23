@@ -356,6 +356,18 @@ function help {
 }
 
 #
+# When the inotifywait command is available this function is called if
+# the kubectl config is changed outside the shell
+#
+function __on_config_changed {
+  current_context=$(kubectl config current-context 2>&1)
+  if [ "$current_context" != "$active_context" ]; then
+    active_context=$current_context
+    echo -e "\nkubectl context changed outside the shell"
+  fi
+}
+
+#
 # Check to make sure necessary commands are installed.
 #
 if ! command -v kubectl > /dev/null 2>&1; then
@@ -436,6 +448,7 @@ export -f __prompt_set
 export -f __print_context_commands
 export -f __print_prompt_commands
 export -f __print_commands
+export -f __on_config_changed
 
 #
 # Exports of available command functions
@@ -447,8 +460,11 @@ export -f help
 #
 # Invoke the shell with exec so its interactive and PS1 gets set.
 #
+echo $$
 exec bash --init-file <(cat << 'EOF'
-  . ~/.bashrc
+  if [ -f ~/.bashrc ]; then
+    . ~/.bashrc
+  fi
   export old_prompt=$PS1
   echo ${kubesh_welcome}
   if $prompt_on; then
@@ -458,7 +474,19 @@ exec bash --init-file <(cat << 'EOF'
     echo "Warning: inotifywait not installed; changes to the kubectl context made"
     echo "outside kubesh will not be noticed by the shell. Install the inotify-tools"
     echo "package then restart kubesh if you want the shell to pick up changes."
+  else
+    { coproc config_watch {
+      while true; do
+        inotifywait --quiet --event modify,move_self,delete_self ~/.kube/config >/dev/null 2>&1 &
+        trap "kill $!; break" 1 2 3 6 15
+        wait $!
+        trap - 1 2 3 6 15
+        __on_config_changed
+      done
+    } >&3; } 3>&1
   fi
+  echo $BASHPID
+  trap "if [ ! -z '$config_watch_PID' ]; then kill $config_watch_PID; fi" 0 1 2 3 6 15
   printf "\n"
 EOF
 )
