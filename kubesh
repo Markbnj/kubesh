@@ -118,6 +118,7 @@ function __print_context {
 # name in $1
 #
 function __switch_context {
+  touch /tmp/.kubesh_config_changing
   kubectl config use-context $1
   active_context=$(kubectl config current-context)
   __prompt_set
@@ -360,10 +361,14 @@ function help {
 # the kubectl config is changed outside the shell
 #
 function __on_config_changed {
-  current_context=$(kubectl config current-context 2>&1)
-  if [ "$current_context" != "$active_context" ]; then
-    active_context=$current_context
-    kill -n 14 $$
+  if [ ! -f /tmp/.kubesh_config_changing ]; then
+    current_context=$(kubectl config current-context 2>&1)
+    if [ "$current_context" != "$active_context" ]; then
+      active_context=$current_context
+      kill -n 14 $$
+    fi
+  else
+    rm /tmp/.kubesh_config_changing
   fi
 }
 
@@ -485,10 +490,14 @@ while true; do
 
       # the posix alarm clock signal (14) gets handled immediately whereas
       # USR1 doesn't get handled until return is pressed
-      trap "printf '\nwarning: kubectl config changed; restarting kubesh\n'; kill -n 14 $PPID; exit" 14
+      trap "kill -n 14 $PPID; exit" 14
     fi
     printf "\n"
 EOF
   )
-  if ! $restart; then break; fi
+  if ! $restart; then
+    break
+  else
+    printf '\nWarning: kubectl config changed; restarting kubesh\n'
+  fi
 done
