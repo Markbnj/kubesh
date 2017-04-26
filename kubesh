@@ -448,13 +448,7 @@ export -f context
 export -f prompt
 export -f help
 
-#
-# Invoke the shell with exec so its interactive and PS1 gets set.
-#
 while true; do
-  #
-  # Check to make sure we have a current kubectl context
-  #
   set +e
   current_context=$(kubectl config current-context 2>&1)
   if [ $? != 0 ]; then
