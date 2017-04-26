@@ -118,7 +118,9 @@ function __print_context {
 # name in $1
 #
 function __switch_context {
-  touch /tmp/.kubesh_config_changing
+  if $inotify; then
+    touch /tmp/.kubesh_config_changing
+  fi
   kubectl config use-context $1
   active_context=$(kubectl config current-context)
   __prompt_set
