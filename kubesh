@@ -470,6 +470,11 @@ while true; do
     if [ -f ~/.bashrc ]; then
       . ~/.bashrc
     fi
+    if [ -z "$KUBECONFIG" ]; then
+      export kube_config_files=("${HOME}/.kube/config")
+    else
+      export kube_config_files=($(echo "$KUBECONFIG" | awk -F: -v OFS="\n" '$1=$1'))
+    fi
     export old_prompt=$PS1
     echo ${kubesh_welcome}
     if $prompt_on; then
@@ -482,7 +487,7 @@ while true; do
     else
       { coproc config_watch {
         while true; do
-          inotifywait --quiet --event modify,move_self,delete_self ~/.kube/config >/dev/null &
+          inotifywait --quiet --event modify,move_self,delete_self ${kube_config_files[@]} >/dev/null &
           trap "kill $!; break" 1 2 3 6 15
           wait $!
           trap - 1 2 3 6 15
