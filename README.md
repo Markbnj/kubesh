@@ -33,5 +33,6 @@ OPTIONAL ARGUMENTS
   - 0.2.0 (4/19/2017): added ability to toggle the prompt display on/off
   - 0.2.1 (4/19/2017): sourced .bashrc in subshell so aliases would work
   - 0.2.2 (4/22/2017): handle the case where no kubectl context exists at start
+  - 0.3.0 (4/27/2017): now watched the kubeconfig for external changes and reboots the shell
 
 ## PR's welcome!
