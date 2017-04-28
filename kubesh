@@ -16,7 +16,7 @@
 
 set -ueo pipefail
 
-export kubesh_version="0.2.2"
+export kubesh_version="0.3.0"
 
 #
 # Only called when the -h options is passed on the command line, not really
@@ -25,11 +25,11 @@ export kubesh_version="0.2.2"
 function __cli_help {
 cat << EOF
 NAME
-  kubesh - sets up a shell environment for kubernetes kubectl tool with a
-  number of useful commands.
+  kubesh ${kubesh_version} - sets up a shell environment for kubernetes
+  kubectl tool with several convenient context management functions.
 
 SYNOPSIS
-  kubesh [-h] [-n]
+  kubesh [-h] [-i] [-p]
 
 DESCRIPTION
   Kubesh displays the current kubernetes context in the shell prompt and adds
@@ -37,10 +37,14 @@ DESCRIPTION
   type 'help' at the shell prompt for more information on commands.
 
 OPTIONAL ARGUMENTS
-  -n
-    Start with the context prompt disabled.
   -h
     Display this help. All other arguments are ignored.
+  -i
+    Do not attempt to use inotifywait (if installed) to monitor changes to the
+    kubectl config files.
+  -p
+    Start with the context prompt disabled. The current context can be shown
+    by typing 'context' at the shell prompt.
 
 EOF
   if [ -z "${1-}" ]; then
@@ -118,6 +122,9 @@ function __print_context {
 # name in $1
 #
 function __switch_context {
+  if $inotify; then
+    touch ${tempdir}/.kubesh_config_changing
+  fi
   kubectl config use-context $1
   active_context=$(kubectl config current-context)
   __prompt_set
@@ -149,7 +156,7 @@ function __select_context {
   __print_context_list
   read -s -N 1 -p "Select context: " choice
   printf "\n"
-  local err_msg="ERROR: choice must be an integer in the range 1..${#contexts[@]}"
+  local err_msg="Error: choice must be an integer in the range 1..${#contexts[@]}"
   case $choice in
     ''|*[!0-9]*)
       echo $err_msg
@@ -225,7 +232,7 @@ function prompt {
         __prompt_set
         ;;
       *)
-        echo "ERROR: unrecognized subcommand $1"
+        echo "Error: unrecognized subcommand $1"
         __print_prompt_commands
         ;;
     esac
@@ -356,52 +363,85 @@ function help {
 }
 
 #
+# When the inotifywait command is available this function is called if
+# the kubectl config is changed outside the shell
+#
+function __on_config_changed {
+  if [ ! -f ${tempdir}/.kubesh_config_changing ]; then
+    current_context=$(kubectl config current-context 2>&1)
+    if [ "$current_context" != "$active_context" ]; then
+      active_context=$current_context
+      kill -n 14 $$
+    fi
+  else
+    rm ${tempdir}/.kubesh_config_changing
+  fi
+}
+
+#
+# Let's not run inside ourself
+#
+set +u
+if [ ! -z "$kubesh_pid" ]; then
+  echo "Error: kubesh is already running"
+  exit 1
+fi
+set -u
+export kubesh_pid=$$
+
+#
 # Check to make sure necessary commands are installed.
 #
 if ! command -v kubectl > /dev/null 2>&1; then
-  echo "ERROR: kubesh requires kubectl (https://kubernetes.io/docs/tasks/kubectl/install/)"
+  echo "Error: kubesh requires kubectl (https://kubernetes.io/docs/tasks/kubectl/install/)"
   exit 1
 fi
 if ! command -v sed > /dev/null 2>&1; then
-  echo "ERROR: kubesh requires the sed program (https://www.gnu.org/software/sed/manual/sed.html)"
+  echo "Error: kubesh requires the sed program (https://www.gnu.org/software/sed/manual/sed.html)"
   exit 1
 fi
-
-#
-# Check to make sure we have a current kubectl context
-#
-set +e
-current_context=$(kubectl config current-context 2>&1)
-if [ $? != 0 ]; then
-  echo "ERROR: couldn't read current kubectl context (do you have one?)"
-  exit 1
-fi
-set -e
 
 #
 # These exports maintain state that is needed in the child shell
 #
-export active_context=$current_context
+export tempdir=${TMPDIR-/tmp}
+export active_context
 export prompt_on=true
+export use_inotify=true
 export kubesh_welcome="kubesh ${kubesh_version} (type 'help' for more information)"
 
 #
 # Handle the few command line args.
 #
-while getopts hn opt; do
+while getopts hip opt; do
   case $opt in
     h)
       __cli_help
       ;;
-    n)
+    i)
+      use_inotify=false
+      ;;
+    p)
       prompt_on=false
       ;;
     *)
-      echo "ERROR: Unknown option '${opt}'"
+      echo "Error: Unknown option '${opt}'"
       cli_help 1
       ;;
   esac
 done
+
+#
+# Determines below whether we can watch the kubectl config for changes.
+#
+export inotify=false
+if $use_inotify; then
+  if command -v inotifywait > /dev/null 2>&1; then
+    inotify=true
+    export restart=false
+    trap "restart=true" 14
+  fi
+fi
 
 #
 # These have to be exported so they are available to be called when commands are
@@ -417,6 +457,7 @@ export -f __prompt_set
 export -f __print_context_commands
 export -f __print_prompt_commands
 export -f __print_commands
+export -f __on_config_changed
 
 #
 # Exports of available command functions
@@ -425,7 +466,66 @@ export -f context
 export -f prompt
 export -f help
 
-#
-# Invoke the shell with exec so its interactive and PS1 gets set.
-#
-exec bash --init-file <(echo '. ~/.bashrc; export old_prompt=$PS1; echo ${kubesh_welcome}; if $prompt_on; then PS1="(${active_context}) $old_prompt"; fi')
+while true; do
+  set +e
+  current_context=$(kubectl config current-context 2>&1)
+  if [ $? != 0 ]; then
+    echo "Error: couldn't read current kubectl context (do you have one?)"
+    exit 1
+  fi
+  set -e
+  active_context=$current_context
+  restart=false
+  bash --init-file <(cat << 'EOF'
+    if [ -f ~/.bashrc ]; then
+      . ~/.bashrc
+    fi
+    if [ -z "$KUBECONFIG" ]; then
+      export kube_config_files=("${HOME}/.kube/config")
+    else
+      export kube_config_files=($(echo "$KUBECONFIG" | awk -F: -v OFS="\n" '$1=$1'))
+    fi
+    export old_prompt=$PS1
+    echo ${kubesh_welcome}
+    if $prompt_on; then
+      PS1="(${active_context}) $old_prompt"
+    fi
+    if ! $inotify; then
+      if ! $use_inotify; then
+        echo "Warning: inotifywait is disabled; changes to the kubectl context made"
+        echo "outside kubesh will not be noticed by the shell."
+      else
+        echo "Warning: inotifywait not installed; changes to the kubectl context made"
+        echo "outside kubesh will not be noticed by the shell. Install the inotify-tools"
+        echo "package then restart kubesh if you want the shell to pick up changes."
+      fi
+    else
+      { coproc config_watch {
+        while true; do
+          inotifywait --quiet --event modify,move_self,delete_self ${kube_config_files[@]} >/dev/null &
+          trap "kill $!; break" 1 2 3 6 15
+          wait $!
+          if [ $? != 0 ]; then
+            trap - 1 2 3 6 15
+            echo "Warning: inotifywait failed; changes to kube config are not monitored."
+            break
+          fi
+          trap - 1 2 3 6 15
+          __on_config_changed
+        done
+      } >&3; } 3>&1
+      trap "if kill -0 $config_watch_PID >/dev/null 2>&1; then kill $config_watch_PID; fi" 0 1 2 3 6 15
+
+      # the posix alarm clock signal (14) gets handled immediately whereas
+      # USR1 doesn't get handled until return is pressed
+      trap "kill -n 14 $PPID; exit" 14
+    fi
+    printf "\n"
+EOF
+  )
+  if ! $restart; then
+    break
+  else
+    printf '\nWarning: kubectl config changed; restarting kubesh\n'
+  fi
+done
