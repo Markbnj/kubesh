@@ -29,7 +29,7 @@ NAME
   kubectl tool with several convenient context management functions.
 
 SYNOPSIS
-  kubesh [-h] [-n]
+  kubesh [-h] [-i] [-p]
 
 DESCRIPTION
   Kubesh displays the current kubernetes context in the shell prompt and adds
@@ -37,10 +37,14 @@ DESCRIPTION
   type 'help' at the shell prompt for more information on commands.
 
 OPTIONAL ARGUMENTS
-  -n
-    Start with the context prompt disabled.
   -h
     Display this help. All other arguments are ignored.
+  -i
+    Do not attempt to use inotifywait (if installed) to monitor changes to the
+    kubectl config files.
+  -p
+    Start with the context prompt disabled. The current context can be shown
+    by typing 'context' at the shell prompt.
 
 EOF
   if [ -z "${1-}" ]; then
@@ -398,32 +402,26 @@ if ! command -v sed > /dev/null 2>&1; then
 fi
 
 #
-# Determines below whether we can watch the kubectl config for changes.
-#
-export inotify=false
-if command -v inotifywait > /dev/null 2>&1; then
-  inotify=true
-  export restart=false
-  trap "restart=true" 14
-fi
-
-#
 # These exports maintain state that is needed in the child shell
 #
 export tempdir=${TMPDIR-/tmp}
 export active_context
 export prompt_on=true
+export use_inotify=true
 export kubesh_welcome="kubesh ${kubesh_version} (type 'help' for more information)"
 
 #
 # Handle the few command line args.
 #
-while getopts hn opt; do
+while getopts hip opt; do
   case $opt in
     h)
       __cli_help
       ;;
-    n)
+    i)
+      use_inotify=false
+      ;;
+    p)
       prompt_on=false
       ;;
     *)
@@ -432,6 +430,18 @@ while getopts hn opt; do
       ;;
   esac
 done
+
+#
+# Determines below whether we can watch the kubectl config for changes.
+#
+export inotify=false
+if $use_inotify; then
+  if command -v inotifywait > /dev/null 2>&1; then
+    inotify=true
+    export restart=false
+    trap "restart=true" 14
+  fi
+fi
 
 #
 # These have to be exported so they are available to be called when commands are
@@ -481,20 +491,30 @@ while true; do
       PS1="(${active_context}) $old_prompt"
     fi
     if ! $inotify; then
-      echo "Warning: inotifywait not installed; changes to the kubectl context made"
-      echo "outside kubesh will not be noticed by the shell. Install the inotify-tools"
-      echo "package then restart kubesh if you want the shell to pick up changes."
+      if ! $use_inotify; then
+        echo "Warning: inotifywait is disabled; changes to the kubectl context made"
+        echo "outside kubesh will not be noticed by the shell."
+      else
+        echo "Warning: inotifywait not installed; changes to the kubectl context made"
+        echo "outside kubesh will not be noticed by the shell. Install the inotify-tools"
+        echo "package then restart kubesh if you want the shell to pick up changes."
+      fi
     else
       { coproc config_watch {
         while true; do
           inotifywait --quiet --event modify,move_self,delete_self ${kube_config_files[@]} >/dev/null &
           trap "kill $!; break" 1 2 3 6 15
           wait $!
+          if [ $? != 0 ]; then
+            trap - 1 2 3 6 15
+            echo "Warning: inotifywait failed; changes to kube config are not monitored."
+            break
+          fi
           trap - 1 2 3 6 15
           __on_config_changed
         done
       } >&3; } 3>&1
-      trap "if [ ! -z '$config_watch_PID' ]; then kill $config_watch_PID; fi" 0 1 2 3 6 15
+      trap "if kill -0 $config_watch_PID >/dev/null 2>&1; then kill $config_watch_PID; fi" 0 1 2 3 6 15
 
       # the posix alarm clock signal (14) gets handled immediately whereas
       # USR1 doesn't get handled until return is pressed
