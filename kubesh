@@ -379,6 +379,14 @@ function __on_config_changed {
 }
 
 #
+# Enforce the minimum bash version
+#
+if (( ${BASH_VERSION%%.*} < 4 )); then
+  echo "Error: kubesh requires bash version 4+. Your bash version: ${BASH_VERSION}"
+  exit 1
+fi
+
+#
 # Let's not run inside ourself
 #
 set +u
