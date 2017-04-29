@@ -55,6 +55,162 @@ EOF
 }
 
 #
+# Called when the 'help context' command is entered, simply prints out the
+# list of available commands for contexts.
+#
+function __print_context_commands {
+cat << EOF
+
+kubesh ${kubesh_version} - kubernetes/kubectl shell environment
+
+context [CONTEXT|SUBCOMMAND]
+
+When given without arguments displays the current context. If a valid context
+name or unique fragment is supplied switches to that context. Any other
+argument is interpreted as a subcommand. The following subcommands are
+available for contexts:
+
+  list
+    Display the list of available contexts from the kubectl
+    config
+
+  select
+    Switch to another context by selecting from a list of all
+    contexts in the config.
+
+EOF
+}
+
+#
+# Called when the 'help prompt' command is entered, simply prints out the
+# list of available commands for prompt control.
+#
+function __print_prompt_commands {
+cat << EOF
+
+kubesh ${kubesh_version} - kubernetes/kubectl shell environment
+
+prompt [SUBCOMMAND]
+
+Enables control over the display of context information in the shell prompt.
+
+  on
+    Turn on display of context information in the shell prompt. This is the
+    default.
+
+  off
+    Turn off display of context information in the shell prompt.
+
+EOF
+}
+
+#
+# Called when the 'help' command is entered, simply prints out the
+# list of available commands.
+#
+function __print_commands {
+cat << EOF
+
+kubesh ${kubesh_version} - kubernetes/kubectl shell environment
+
+The following commands are available:
+
+  context [CONTEXT|SUBCOMMAND]
+    List and select available cluster contexts, or print the current context.
+
+  prompt [SUBCOMMAND]
+    Enables/disables display of the current kubernetes context in the shell
+    prompt.
+
+  help [TOPIC]
+    Show help for the kubesh environment. When given without arguments the
+    command displays this message. When given with a topic keyword displays
+    help for that topic. The following topics are available:
+
+    context - help for context commands
+    bash - help for bash commands
+
+    Any unrecognized help topic is passed through to bash help.
+
+EOF
+}
+
+#
+# Implements the help command. Recognized topics invoke one of the functions
+# above to print out help for that topic. Unrecognized topics are passed to
+# the bash builtin help system. The special topic "help bash" invokes the
+# builtin help with no arguments.
+#
+function help {
+  if [ -z "${1}" ]; then
+      __print_commands
+  else
+    shopt -s nocasematch
+    case "$1" in
+      "context")
+        __print_context_commands
+        ;;
+      "prompt")
+        __print_prompt_commands
+        ;;
+      "bash")
+        builtin help
+        ;;
+      *)
+        builtin help $1
+        ;;
+    esac
+    shopt -u nocasematch
+  fi
+}
+
+#
+# Turns the display of context information in the shell prompt on or off
+# based on the current state of $prompt_on
+#
+function __prompt_set {
+  if $prompt_on; then
+    PS1="(${active_context}) $old_prompt"
+  else
+    PS1="$old_prompt"
+  fi
+}
+
+#
+# Implements the prompt command. The prompt command format is:
+#   prompt [SUBCOMMAND]
+# where SUBCOMMAND is on of the available subcommands.
+#
+function prompt {
+  if [ -z "${1}" ]; then
+    if $prompt_on; then
+      prompt_on=false
+      __prompt_set
+    else
+      prompt_on=true
+      __prompt_set
+    fi
+  else
+    shopt -s nocasematch
+    case "$1" in
+      "on")
+        prompt_on=true
+        __prompt_set
+        ;;
+      "off")
+        prompt_on=false
+        __prompt_set
+        ;;
+      *)
+        echo "Error: unrecognized subcommand $1"
+        __print_prompt_commands
+        ;;
+    esac
+    shopt -u nocasematch
+  fi
+}
+
+#
 # Responsible for parsing contexts out of the output from 'kubectl config view'.
 # After this runs the global 'contexts' is an array of strings representing
 # serialized associative arrays, one per context.
@@ -207,162 +363,6 @@ function context {
 }
 
 #
-# Implements the prompt command. The prompt command format is:
-#   prompt [SUBCOMMAND]
-# where SUBCOMMAND is on of the available subcommands.
-#
-function prompt {
-  if [ -z "${1}" ]; then
-    if $prompt_on; then
-      prompt_on=false
-      __prompt_set
-    else
-      prompt_on=true
-      __prompt_set
-    fi
-  else
-    shopt -s nocasematch
-    case "$1" in
-      "on")
-        prompt_on=true
-        __prompt_set
-        ;;
-      "off")
-        prompt_on=false
-        __prompt_set
-        ;;
-      *)
-        echo "Error: unrecognized subcommand $1"
-        __print_prompt_commands
-        ;;
-    esac
-    shopt -u nocasematch
-  fi
-}
-
-#
-# Turns the display of context information in the shell prompt on or off
-# based on the current state of $prompt_on
-#
-function __prompt_set {
-  if $prompt_on; then
-    PS1="(${active_context}) $old_prompt"
-  else
-    PS1="$old_prompt"
-  fi
-}
-
-#
-# Called when the 'help context' command is entered, simply prints out the
-# list of available commands for contexts.
-#
-function __print_context_commands {
-cat << EOF
-
-kubesh ${kubesh_version} - kubernetes/kubectl shell environment
-
-context [CONTEXT|SUBCOMMAND]
-
-When given without arguments displays the current context. If a valid context
-name or unique fragment is supplied switches to that context. Any other
-argument is interpreted as a subcommand. The following subcommands are
-available for contexts:
-
-  list
-    Display the list of available contexts from the kubectl
-    config
-
-  select
-    Switch to another context by selecting from a list of all
-    contexts in the config.
-
-EOF
-}
-
-#
-# Called when the 'help prompt' command is entered, simply prints out the
-# list of available commands for prompt control.
-#
-function __print_prompt_commands {
-cat << EOF
-
-kubesh ${kubesh_version} - kubernetes/kubectl shell environment
-
-prompt [SUBCOMMAND]
-
-Enables control over the display of context information in the shell prompt.
-
-  on
-    Turn on display of context information in the shell prompt. This is the
-    default.
-
-  off
-    Turn off display of context information in the shell prompt.
-
-EOF
-}
-
-#
-# Called when the 'help' command is entered, simply prints out the
-# list of available commands.
-#
-function __print_commands {
-cat << EOF
-
-kubesh ${kubesh_version} - kubernetes/kubectl shell environment
-
-The following commands are available:
-
-  context [CONTEXT|SUBCOMMAND]
-    List and select available cluster contexts, or print the current context.
-
-  prompt [SUBCOMMAND]
-    Enables/disables display of the current kubernetes context in the shell
-    prompt.
-
-  help [TOPIC]
-    Show help for the kubesh environment. When given without arguments the
-    command displays this message. When given with a topic keyword displays
-    help for that topic. The following topics are available:
-
-    context - help for context commands
-    bash - help for bash commands
-
-    Any unrecognized help topic is passed through to bash help.
-
-EOF
-}
-
-#
-# Implements the help command. Recognized topics invoke one of the functions
-# above to print out help for that topic. Unrecognized topics are passed to
-# the bash builtin help system. The special topic "help bash" invokes the
-# builtin help with no arguments.
-#
-function help {
-  if [ -z "${1}" ]; then
-      __print_commands
-  else
-    shopt -s nocasematch
-    case "$1" in
-      "context")
-        __print_context_commands
-        ;;
-      "prompt")
-        __print_prompt_commands
-        ;;
-      "bash")
-        builtin help
-        ;;
-      *)
-        builtin help $1
-        ;;
-    esac
-    shopt -u nocasematch
-  fi
-}
-
-#
 # When the inotifywait command is available this function is called if
 # the kubectl config is changed outside the shell
 #
@@ -470,9 +470,9 @@ export -f __on_config_changed
 #
 # Exports of available command functions
 #
-export -f context
-export -f prompt
 export -f help
+export -f prompt
+export -f context
 
 while true; do
   set +e
