@@ -362,6 +362,32 @@ function context {
   fi
 }
 
+export __ls=$(which ls)
+
+function ls {
+  shopt -s nocasematch
+  case "${@: -1}" in
+    "nodes"|\
+    "pods"|\
+    "deployments"|"dep"|\
+    "replicasets"|"rs"|\
+    "daemonsets"|"ds"|\
+    "statefulsets"|"ss"|\
+    "services"|"svc"|\
+    "endpoints"|"ep")
+      list ${@: -1}
+      ;;
+    *)
+      ${__ls} $@
+      ;;
+  esac
+  shopt -u nocasematch
+}
+
+function list {
+  echo $@
+}
+
 #
 # When the inotifywait command is available this function is called if
 # the kubectl config is changed outside the shell
@@ -470,9 +496,14 @@ export -f __on_config_changed
 #
 # Exports of available command functions
 #
+# list|ls nodes|pods|deployments|replicasets|daemonsets|statefulsets|services|endpoints|namespaces
+# describe|desc nodes|pods|deployments|replicasets|daemonsets|statefulsets|services|endpoints|namespaces <name>
+# pod <pod_name>
 export -f help
 export -f prompt
 export -f context
+export -f list
+export -f ls
 
 while true; do
   set +e
