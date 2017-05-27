@@ -310,7 +310,7 @@ function __search_context {
 #
 function __select_context {
   __print_context_list
-  read -s -N 1 -p "Select context: " choice
+  read -N 1 -p "Select context: " choice
   printf "\n"
   local err_msg="Error: choice must be an integer in the range 1..${#contexts[@]}"
   case $choice in
