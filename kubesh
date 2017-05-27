@@ -16,7 +16,7 @@
 
 set -ueo pipefail
 
-export kubesh_version="0.3.1"
+export kubesh_version="0.3.2"
 
 #
 # Only called when the -h options is passed on the command line, not really
