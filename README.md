@@ -11,7 +11,7 @@ Just clone the repo or simply copy the `kubesh` script somewhere on your path an
 
 ```
 NAME
-  kubesh 0.3.0 - sets up a shell environment for kubernetes kubectl tool with a
+  kubesh 0.3.2 - sets up a shell environment for kubernetes kubectl tool with a
   number of useful commands.
 
 SYNOPSIS
@@ -46,5 +46,6 @@ If the inotify-tools package is not installed, or the user passes the `-i` comma
   - 0.2.2 (4/22/2017): handle the case where no kubectl context exists at start
   - 0.3.0 (4/27/2017): now watches the kubeconfig for external changes and reboots the shell
   - 0.3.1 (5/27/2017): fixed issue with subshell active context getting out of sync
+  - 0.3.2 (5/27/2017): show the number the user presses when selecting a context
 
 ## PR's welcome!
