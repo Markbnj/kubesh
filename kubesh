@@ -16,7 +16,7 @@
 
 set -ueo pipefail
 
-export kubesh_version="0.3.0"
+export kubesh_version="0.3.1"
 
 #
 # Only called when the -h options is passed on the command line, not really
@@ -375,6 +375,7 @@ function __on_config_changed {
     fi
   else
     rm ${tempdir}/.kubesh_config_changing
+    active_context=$(kubectl config current-context 2>&1)
   fi
 }
 
